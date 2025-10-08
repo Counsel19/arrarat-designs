@@ -32,7 +32,14 @@ const app: express.Application | undefined = express();
 // Load App Middleware
 app.use(morgan('dev'));
 app.use(helmet());
-app.use(cors());
+
+const corsOptions = {
+  origin: ['http://localhost:5500', 'https://arrarat-designs.onrender.com'],
+  methods: 'GET, PUT, POST, DELETE',
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
