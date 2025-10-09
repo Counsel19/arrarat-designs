@@ -10,7 +10,7 @@ const password = environmentConfig.SMTP_PASSWORD || '';
 const service = environmentConfig.SMTP_SERVICE || '';
 
 export const transporter = nodemailer.createTransport({
-  port: 465,
+  port: 587,
   service,
   host,
   secure: false,
