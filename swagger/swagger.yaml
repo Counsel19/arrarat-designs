@@ -12,7 +12,8 @@ info:
     url: "https://www.apache.org/licenses/LICENSE-2.0.html"
 
 servers:
-  - url: "{serverUrl}/api/{apiVersion}"
+  - url: "https://arrarat-designs.onrender.com/api/{apiVersion}"
+    description: Production
     variables:
       apiVersion:
         default: v1
@@ -20,11 +21,12 @@ servers:
           - v1
           - v2
           - v3
-      serverUrl:
-        description: Environment -  Production, Staging, Test or Dev
-        default: http://localhost:8000
-        enum:
-          - http://localhost:8000
+
+  - url: "http://localhost:8000/api/{apiVersion}"
+    description: Local development
+    variables:
+      apiVersion:
+        default: v1
 
 paths:
   # Health Check

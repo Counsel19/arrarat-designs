@@ -35,7 +35,7 @@ app.use(helmet());
 
 const corsOptions = {
   origin: ['http://localhost:5500', 'https://arrarat-designs.onrender.com'],
-  methods: 'GET, PUT, POST, DELETE',
+  methods: 'GET, PUT, POST, DELETE, OPTIONS',
   credentials: true,
 };
 
