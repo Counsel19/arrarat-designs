@@ -722,10 +722,17 @@ export const sendForgotPasswordMailService: RequestHandler = async (req, res, ne
     token.accessToken = generatedAccessToken;
     token = await token.save();
 
-    const passwordResetEmailLink = `${environmentConfig.WEBSITE_URL}/reset-password?id=${user._id}&token=${token.refreshToken}`;
+    const passwordResetEmailLink = `${environmentConfig.WEBSITE_URL}/admin/reset-password.html?id=${user._id}&token=${token.refreshToken}`;
 
-    // password Reset Email
-    sendResetPasswordEmail(email, user.name, passwordResetEmailLink);
+    // password Reset Email - send email but don't block response if it fails
+    try {
+      const userName = user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : email;
+      await sendResetPasswordEmail(email, userName, passwordResetEmailLink);
+    } catch (emailError) {
+      // Log email error but don't fail the request
+      // User can still use the reset link from the response
+      console.error('Error sending password reset email:', emailError);
+    }
 
     const data = {
       user: {
@@ -738,12 +745,25 @@ export const sendForgotPasswordMailService: RequestHandler = async (req, res, ne
         data,
         success: true,
         error: false,
-        message: `Auth success. An Email with Rest password link has been sent to your account ${email}  please check to rest your password or use the the link which is been send with the response body to rest your password`,
+        message: `Auth success. An Email with Reset password link has been sent to your account ${email}. Please check to reset your password or use the link which is been sent with the response body to reset your password`,
         status: 200,
       })
     );
   } catch (error) {
-    return next(InternalServerError);
+    console.error('❌ Error in sendForgotPasswordMailService:', error);
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error name:', error.name);
+      if (error.stack) {
+        console.error('Error stack:', error.stack);
+      }
+    } else if (typeof error === 'object' && error !== null) {
+      console.error('Error object:', JSON.stringify(error, null, 2));
+    }
+    // Return more specific error message instead of generic InternalServerError
+    const errorMessage = error instanceof Error ? error.message : 'Failed to process forgot password request';
+    return next(createHttpError(500, errorMessage));
   }
 };
 

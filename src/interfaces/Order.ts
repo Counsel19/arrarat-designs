@@ -1,9 +1,9 @@
 import mongoose, { Document } from 'mongoose';
-import { ProductT } from './Product';
 import { IUser } from './User';
 
 export interface OrderedUser extends IUser {
   product: mongoose.Schema.Types.ObjectId;
+  phone?: string;
 }
 
 export interface ShippingInfoT {
@@ -16,20 +16,35 @@ export interface ShippingInfoT {
   city: string;
 }
 
+export interface OrderItemT {
+  product: mongoose.Schema.Types.ObjectId;
+  quantity: number;
+  unitPrice: number;
+  nameSnapshot: string;
+}
+
 export interface OrderT extends Document {
-  orderItems: { quantity: number; product: mongoose.Schema.Types.ObjectId }[];
+  orderItems: OrderItemT[];
   user: OrderedUser;
   shippingInfo: ShippingInfoT;
-  paymentInfo: string;
+  paymentMethod: string;
   textAmount: number;
   shippingAmount: number;
+  subTotal: number;
   totalAmount: number;
+  invoiceNumber?: string;
+  invoice?: mongoose.Schema.Types.ObjectId;
+  whatsappMessageUrl?: string;
+  adminContactSnapshot?: string;
+  statusHistory?: {
+    status: string;
+    note?: string;
+    changedBy?: mongoose.Schema.Types.ObjectId;
+    changedAt?: Date;
+  }[];
   orderStatus: string;
-  deliveredAt: Date;
+  deliveredAt?: Date;
 }
 
 export interface ProcessingOrderT extends IUser, OrderT {}
 
-export interface ProcessingStripeCheckoutT extends IUser {
-  orderItems: { quantity: number; product: ProductT }[];
-}

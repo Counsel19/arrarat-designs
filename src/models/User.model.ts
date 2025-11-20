@@ -13,6 +13,8 @@ export interface IUserDocument extends Document, IUser {
   clearCart(): Promise<void>;
   addToCart(prodId: string, doDecrease: boolean): Promise<boolean>;
   removeFromCart(prodId: string): Promise<void>;
+  addToWishlist(prodId: string): Promise<void>;
+  removeFromWishlist(prodId: string): Promise<void>;
 }
 
 const UserSchema: Schema<IUserDocument> = new Schema(
@@ -76,6 +78,12 @@ const UserSchema: Schema<IUserDocument> = new Schema(
         },
       ],
     },
+    wishlist: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+      },
+    ],
     companyName: {
       type: String,
       required: false,
@@ -297,6 +305,23 @@ UserSchema.methods.removeFromCart = function (productId: string) {
 
 UserSchema.methods.clearCart = async function (): Promise<boolean> {
   this.cart = { items: [] };
+  return this.save({ validateBeforeSave: false });
+};
+
+UserSchema.methods.addToWishlist = async function (prodId: string): Promise<void> {
+  const wishlist = this.wishlist || [];
+  const exists = wishlist.some((item: mongoose.Schema.Types.ObjectId) => item.toString() === prodId.toString());
+  if (!exists) {
+    wishlist.push(prodId);
+    this.wishlist = wishlist;
+    await this.save({ validateBeforeSave: false });
+  }
+};
+
+UserSchema.methods.removeFromWishlist = function (prodId: string) {
+  this.wishlist = (this.wishlist || []).filter(
+    (item: mongoose.Schema.Types.ObjectId) => item.toString() !== prodId.toString()
+  );
   return this.save({ validateBeforeSave: false });
 };
 

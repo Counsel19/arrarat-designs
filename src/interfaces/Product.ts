@@ -17,8 +17,7 @@ export interface ProductT extends Document {
     url: string;
     cloudinary_id: string;
   }[];
-  brand: string;
-  category: string;
+  category: mongoose.Schema.Types.ObjectId;
   stock?: string;
   numberOfReviews: number;
   reviews: ReviewsT[];

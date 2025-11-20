@@ -13,6 +13,7 @@ import {
   productsPaginationMiddleware,
   signupUserValidation,
   updateOrderStatusValidation,
+  confirmPaymentValidation,
   updatePostValidation,
   updateProductValidation,
   updateUserValidation,
@@ -46,6 +47,7 @@ import {
   adminUpdateOrderStatusController,
   adminUpdatePostController,
   adminUpdateProductController,
+  confirmPaymentController,
 } from '@src/controllers';
 import { environmentConfig } from '@src/configs';
 import { adminClearAllPostsService, adminDeleteAllOrderForGivenUserService } from '@src/services';
@@ -166,6 +168,14 @@ router.delete(
   isAuth,
   customRoles(environmentConfig.ADMIN_EMAILS, authorizationRoles.admin),
   adminDeleteAllOrderForGivenUserService
+);
+
+router.post(
+  '/orders/confirm-payment',
+  isAuth,
+  customRoles(environmentConfig.ADMIN_EMAILS, authorizationRoles.admin),
+  confirmPaymentValidation,
+  confirmPaymentController
 );
 
 router

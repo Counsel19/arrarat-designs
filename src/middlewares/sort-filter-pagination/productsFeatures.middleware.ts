@@ -96,6 +96,7 @@ export const productsPaginationMiddleware = () => {
       }
 
       results.results = await query
+        .populate('category')
         .populate('user', '-password -confirmPassword  -status -cart -role -status -isVerified -isDeleted -acceptTerms')
         .populate('reviews.user', 'name  surname nationality ')
         .exec();

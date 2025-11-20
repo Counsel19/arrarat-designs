@@ -366,7 +366,7 @@ export const adminAddProductService = async (
 ) => {
   const PWD = process.env.PWD || process.cwd();
 
-  const { name, price, description, brand, category, stock } = req.body;
+  const { name, price, description, category, stock } = req.body;
 
   // console.log(req.file, req.files);
 
@@ -406,7 +406,6 @@ export const adminAddProductService = async (
       name,
       price,
       description,
-      brand,
       category,
       stock,
       productImages: imageUrlList,
@@ -425,7 +424,6 @@ export const adminAddProductService = async (
         productImages: createdProduct.productImages,
         count: createdProduct.count,
         ratings: createdProduct.ratings,
-        brand: createdProduct.brand,
         stock: createdProduct.stock,
         category: createdProduct.category,
         reviews: createdProduct.reviews,
@@ -563,7 +561,7 @@ export const adminUpdateProductService = async (
 ) => {
   const PWD = process.env.PWD || process.cwd();
 
-  const { name, price, description, brand, category, stock } = req.body;
+  const { name, price, description, category, stock } = req.body;
 
   try {
     const product = await Product.findById(req.params.productId);
@@ -610,7 +608,6 @@ export const adminUpdateProductService = async (
     product.name = name || product.name;
     product.price = price || product.price;
     product.description = description || product.description;
-    product.brand = brand || product.brand;
     product.category = category || product.category;
     product.stock = stock || product.stock;
     const updatedProduct = await product.save();

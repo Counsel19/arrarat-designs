@@ -4655,6 +4655,132 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ServerErrorResponse"
 
+  # Category
+  /categories:
+    get:
+      tags:
+        - Category
+      summary: Returns a list of categories (supports search, pagination)
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            example: 20
+        - in: query
+          name: page
+          schema:
+            type: integer
+            example: 1
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: sort
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponseList"
+        "400":
+          $ref: "#/components/schemas/BadRequestResponse"
+        "500":
+          $ref: "#/components/schemas/ServerErrorResponse"
+
+    post:
+      tags:
+        - Category
+      summary: Create a new category
+      security:
+        - Authorization: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/schemas/BadRequestResponse"
+
+  /categories/{categoryId}:
+    get:
+      tags:
+        - Category
+      summary: Get a single category by ID
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "404":
+          description: Not found
+
+    patch:
+      tags:
+        - Category
+      summary: Update a category by ID
+      security:
+        - Authorization: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/schemas/BadRequestResponse"
+
+    delete:
+      tags:
+        - Category
+      summary: Delete a category by ID
+      security:
+        - Authorization: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          description: Not found
+
   # Manager
 
   /manager/users:
@@ -6049,6 +6175,89 @@ components:
           type: string
         profileImage:
           type: string
+
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+        cloudinary_id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CategoryInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+          format: binary
+      required:
+        - name
+        - description
+
+    CategoryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        error:
+          type: boolean
+        message:
+          type: string
+        status:
+          type: integer
+        data:
+          type: object
+          properties:
+            category:
+              $ref: "#/components/schemas/Category"
+
+    CategoryResponseList:
+      type: object
+      properties:
+        success:
+          type: boolean
+        error:
+          type: boolean
+        message:
+          type: string
+        status:
+          type: integer
+        data:
+          type: object
+          properties:
+            totalDocs:
+              type: integer
+            totalPages:
+              type: integer
+            count:
+              type: integer
+            currentPage:
+              type: object
+              properties:
+                page:
+                  type: integer
+                limit:
+                  type: integer
+            categories:
+              type: array
+              items:
+                $ref: "#/components/schemas/Category"
 
   securitySchemes:
     Authorization:

@@ -1,9 +1,7 @@
 export const orderStatus = {
   pending: 'pending',
-  delivered: 'delivered',
-  waitingPayment: 'waiting payment',
-  waitingPickup: 'waiting pickup ',
-  shipped: 'shipped',
-  cancelled: 'cancelled',
+  awaitingPayment: 'awaiting_payment',
+  paymentConfirmed: 'payment_confirmed',
   completed: 'completed',
+  cancelled: 'cancelled',
 };

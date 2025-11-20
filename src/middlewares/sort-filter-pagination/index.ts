@@ -1,3 +1,4 @@
+export * from './categoryFeatures.middleware';
 export * from './postsFeatures.middleware';
 export * from './productsFeatures.middleware';
 export * from './topAliasProduct';

@@ -1,15 +1,16 @@
 import { NextFunction, Response } from 'express';
 import createHttpError, { InternalServerError } from 'http-errors';
 import fs from 'fs';
-import PDFDocument from 'pdfkit';
-import { resolve } from 'path';
 
-import { AuthenticatedRequestBody, IUser, OrderT, ProcessingOrderT } from '@src/interfaces';
-import { customResponse } from '@src/utils';
+import { AuthenticatedRequestBody, IUser, OrderItemT, OrderT, ProcessingOrderT } from '@src/interfaces';
+import { customResponse, generateInvoiceNumber, generateInvoicePdf, buildWhatsappMessageLink } from '@src/utils';
 import Order from '@src/models/Order.model';
 import User from '@src/models/User.model';
 import Product from '@src/models/Product.model';
-import { authorizationRoles } from '@src/constants';
+import Invoice from '@src/models/Invoice.model';
+import { authorizationRoles, orderStatus } from '@src/constants';
+import { getOrCreatePlatformSettings } from './settings.service';
+import { sendNewOrderNotificationEmail, sendOrderConfirmationEmail } from '@src/utils/sendEmail';
 
 export const getOrdersService = async (req: AuthenticatedRequestBody<IUser>, res: Response, next: NextFunction) => {
   try {
@@ -35,6 +36,7 @@ export const getOrdersService = async (req: AuthenticatedRequestBody<IUser>, res
       })
     );
   } catch (error) {
+    console.error(error);
     return next(InternalServerError);
   }
 };
@@ -82,87 +84,295 @@ export const postOrderService = async (
   next: NextFunction
 ) => {
   try {
-    const { shippingInfo, paymentInfo, textAmount, shippingAmount, totalAmount, orderStatus, orderItems } = req.body;
+    const { shippingInfo, paymentMethod, textAmount = 0, shippingAmount = 0, totalAmount, orderItems } = req.body;
 
-    const authUser = await User.findById(req.user?._id).select('-password -confirmPassword -cart -status');
+    // Validate required fields
+    if (!shippingInfo) {
+      return next(createHttpError(400, 'Shipping information is required'));
+    }
+    if (!shippingInfo.address || !shippingInfo.city || !shippingInfo.country || !shippingInfo.zipCode || !shippingInfo.phoneNo) {
+      return next(createHttpError(400, 'Shipping information is incomplete. Required: address, city, country, zipCode, phoneNo'));
+    }
+
+    const authUser = await User.findById(req.user?._id)
+      .select('-password -confirmPassword -status')
+      .populate('cart.items.productId')
+      .exec();
 
     if (!authUser) {
       return next(createHttpError(401, `Auth Failed`));
     }
 
-    // check if ordered product still exists on db
-    if (orderItems && orderItems.length > 0) {
-      orderItems.forEach(async (item) => {
-        const isProductStillExits = await Product.findById(item.product);
-        if (!isProductStillExits) return next(new createHttpError.BadRequest());
+    const requestedItems =
+      orderItems && orderItems.length > 0
+        ? orderItems.map((item) => ({ product: item.product, quantity: item.quantity }))
+        : [];
+
+    const cartItems =
+      authUser.cart?.items?.map((item: { quantity: number; productId: { _id: string } }) => ({
+        product: item.productId?._id || item.productId,
+        quantity: item.quantity,
+      })) || [];
+
+    const itemsToProcess = requestedItems.length ? requestedItems : cartItems;
+
+    console.log('Order processing:', {
+      requestedItemsCount: requestedItems.length,
+      cartItemsCount: cartItems.length,
+      itemsToProcessCount: itemsToProcess.length,
+      orderItems: orderItems ? orderItems.length : 0,
+    });
+
+    if (!itemsToProcess.length) {
+      return next(createHttpError(402, `Order Failed (your cart is empty)`));
+    }
+
+    const finalItemsToOrder: OrderItemT[] = [];
+    let subTotal = 0;
+
+    for (const item of itemsToProcess) {
+      if (!item.product) {
+        console.error('Invalid item missing product ID:', item);
+        return next(new createHttpError.BadRequest(`Invalid order item: product ID is required`));
+      }
+      
+      const productDoc = await Product.findById(item.product);
+      if (!productDoc) {
+        console.error(`Product not found: ${item.product}`);
+        return next(new createHttpError.BadRequest(`Product with id ${item.product} not found`));
+      }
+      
+      const quantity = item.quantity || 1;
+      if (quantity < 1) {
+        return next(new createHttpError.BadRequest(`Invalid quantity for product ${item.product}: ${quantity}`));
+      }
+      
+      const lineTotal = Number(productDoc.price) * quantity;
+      subTotal += lineTotal;
+
+      finalItemsToOrder.push({
+        product: productDoc._id,
+        quantity,
+        unitPrice: productDoc.price,
+        nameSnapshot: productDoc.name,
       });
     }
 
-    // const userCart = await User.findById(req.user?._id).select('cart').populate('cart.items.productId').exec();
-    const userCart = await User.findById(req.user?._id);
-    if (!userCart && !orderItems) {
-      return next(createHttpError(401, `Auth Failed`));
+    const computedTotal = (totalAmount || subTotal + shippingAmount + textAmount).valueOf();
+
+    // Ensure required fields are present
+    const userAddress = authUser.address || shippingInfo.address || shippingInfo.street || '';
+    if (!userAddress) {
+      return next(createHttpError(400, 'User address is required'));
     }
 
-    if (!orderItems && userCart.cart.items.length <= 0) {
-      return next(createHttpError(402, `Oder Failed (your cart is empty)`));
+    // Ensure we have valid user name and surname
+    if (!authUser.name || !authUser.surname) {
+      return next(createHttpError(400, 'User name and surname are required'));
     }
 
-    const finalItemsToOrder =
-      orderItems && orderItems.length > 0
-        ? orderItems
-        : userCart.cart.items.map((item: { quantity: number; productId: { _doc: OrderT } }) => {
-            return { quantity: item.quantity, product: item.productId };
-          });
+    console.log('Creating order with:', {
+      shippingInfo,
+      paymentMethod,
+      orderItemsCount: finalItemsToOrder.length,
+      subTotal,
+      totalAmount: computedTotal,
+    });
 
-    const itemTotalAmount = finalItemsToOrder.reduce(
-      (accumulator: number, currentValue: { product: string; quantity: number }) => accumulator + currentValue.quantity,
-      0
-    );
-
-    // Create new order
-    // Assuming (name,email,phone,address) will be coming in req.body
     const order = new Order({
       shippingInfo,
-      paymentInfo,
+      paymentMethod: paymentMethod || 'bank-transfer',
       textAmount,
       shippingAmount,
-      totalAmount: totalAmount || itemTotalAmount + shippingAmount + textAmount,
-      orderStatus,
+      subTotal,
+      totalAmount: computedTotal,
       user: {
         name: authUser.name,
         surname: authUser.surname,
         email: authUser.email,
-        phone: authUser.mobileNumber,
-        address: authUser.address,
-        userId: userCart._id,
+        phone: authUser.mobileNumber || shippingInfo.phoneNo,
+        address: userAddress,
+        userId: authUser._id,
       },
       orderItems: finalItemsToOrder,
+      statusHistory: [
+        {
+          status: orderStatus.awaitingPayment,
+          note: 'Order created and waiting for payment confirmation',
+          changedBy: authUser._id,
+        },
+      ],
     });
 
-    // Save the order
-    const orderedItem = await order.save();
-    orderedItem.user = authUser;
-
-    // Clear the cart
-    if (!orderItems) {
-      await authUser.clearCart();
+    console.log('Saving order to database...');
+    let orderedItem;
+    try {
+      orderedItem = await order.save();
+    } catch (saveError: any) {
+      console.error('Error saving order:', saveError);
+      if (saveError.name === 'ValidationError') {
+        const validationErrors = Object.values(saveError.errors || {}).map((err: any) => err.message);
+        return next(createHttpError(400, `Order validation failed: ${validationErrors.join(', ')}`));
+      }
+      throw saveError; // Re-throw to be caught by outer catch
     }
+    await orderedItem.populate('orderItems.product');
+
+    console.log('Order saved successfully:', orderedItem._id);
+
+    const settings = await getOrCreatePlatformSettings();
+
+    let invoiceNumber = generateInvoiceNumber();
+    // Ensure uniqueness
+    // eslint-disable-next-line no-await-in-loop
+    let attempts = 0;
+    while (await Invoice.exists({ invoiceNumber }) && attempts < 10) {
+      invoiceNumber = generateInvoiceNumber(Math.floor(Math.random() * 9999));
+      attempts++;
+    }
+
+    if (attempts >= 10) {
+      console.error('Failed to generate unique invoice number after 10 attempts');
+      return next(createHttpError(500, 'Failed to generate unique invoice number'));
+    }
+
+    console.log('Generating invoice PDF for order:', orderedItem._id);
+    let invoicePdf;
+    try {
+      invoicePdf = await generateInvoicePdf({ order: orderedItem as unknown as OrderT, invoiceNumber });
+    } catch (pdfError: any) {
+      console.error('Error generating invoice PDF:', pdfError);
+      return next(createHttpError(500, `Failed to generate invoice PDF: ${pdfError.message || 'Unknown error'}`));
+    }
+
+    const whatsappTemplate =
+      settings.whatsappMessageTemplate ||
+      'Hello, I just placed an order with invoice {invoiceNumber}. Can you confirm payment instructions?';
+    const whatsappMessage = whatsappTemplate.replace('{invoiceNumber}', invoiceNumber);
+    const whatsappUrl = buildWhatsappMessageLink(settings.adminWhatsappNumber, whatsappMessage);
+
+    console.log('Creating invoice record for order:', orderedItem._id);
+    let invoice;
+    try {
+      invoice = await Invoice.create({
+        order: orderedItem._id,
+        invoiceNumber,
+        amountDue: computedTotal,
+        currency: 'NGN',
+        customer: {
+          name: `${authUser.name} ${authUser.surname}`,
+          email: authUser.email,
+          phone: authUser.mobileNumber || shippingInfo.phoneNo,
+        },
+        documentPath: invoicePdf.absolutePath,
+        documentUrl: invoicePdf.relativePath,
+        whatsappMessageUrl: whatsappUrl,
+        adminWhatsappSnapshot: settings.adminWhatsappNumber,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+      console.log('Invoice created successfully:', invoice._id);
+    } catch (invoiceError: any) {
+      console.error('Error creating invoice:', invoiceError);
+      return next(createHttpError(500, `Failed to create invoice: ${invoiceError.message || 'Unknown error'}`));
+    }
+
+    orderedItem.invoice = invoice._id;
+    orderedItem.invoiceNumber = invoiceNumber;
+    orderedItem.whatsappMessageUrl = whatsappUrl;
+    orderedItem.adminContactSnapshot = settings.adminWhatsappNumber;
+    await orderedItem.save({ validateBeforeSave: false });
+
+    // Always clear the cart after successful order creation
+    // This ensures the cart is empty regardless of whether orderItems was provided
+    try {
+      await authUser.clearCart();
+      console.log('Cart cleared successfully for user:', authUser._id);
+    } catch (cartError) {
+      console.error('Error clearing cart after order creation:', cartError);
+      // Don't fail the order if cart clearing fails - order is already created
+    }
+
+    // Send admin notification email
+    sendNewOrderNotificationEmail({
+      adminEmail: settings.orderNotificationEmail,
+      customerName: `${authUser.name} ${authUser.surname}`,
+      customerPhone: authUser.mobileNumber || shippingInfo.phoneNo,
+      invoiceNumber,
+      orderId: orderedItem._id.toString(),
+      totalAmount: computedTotal,
+      whatsappUrl: whatsappUrl,
+    }).catch((error) => console.error('Error sending admin notification email:', error));
+
+    // Send customer order confirmation email
+    const shippingAddressParts = [
+      shippingInfo.address || shippingInfo.street || '',
+      shippingInfo.city || '',
+      shippingInfo.zipCode || '',
+      shippingInfo.country || '',
+    ].filter(Boolean);
+    const shippingAddressText = shippingAddressParts.join(', ');
+
+    sendOrderConfirmationEmail({
+      customerEmail: authUser.email,
+      customerName: `${authUser.name} ${authUser.surname}`,
+      invoiceNumber,
+      orderId: orderedItem._id.toString(),
+      totalAmount: computedTotal,
+      orderItems: finalItemsToOrder.map(item => ({
+        name: item.nameSnapshot || 'Product',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      shippingAddress: shippingAddressText,
+    }).catch((error) => console.error('Error sending customer order confirmation email:', error));
 
     const data = {
       order: orderedItem,
+      invoice: {
+        invoiceNumber,
+        downloadUrl: invoice.documentUrl,
+        whatsappUrl,
+        adminWhatsappNumber: settings.adminWhatsappNumber,
+      },
     };
 
     return res.status(201).send(
       customResponse<typeof data>({
         success: true,
         error: false,
-        message: `Thank you, your orders will be shipped in 2-3 business days`,
+        message: `Order received. An invoice has been generated and sent to your dashboard.`,
         status: 201,
         data,
       })
     );
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error in postOrderService:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+      code: error?.code,
+      errors: error?.errors,
+    });
+    
+    // Check for validation errors
+    if (error?.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors || {}).map((err: any) => err.message);
+      return next(createHttpError(400, `Validation Error: ${validationErrors.join(', ')}`));
+    }
+    
+    // Check for cast errors (invalid ObjectId, etc.)
+    if (error?.name === 'CastError') {
+      return next(createHttpError(400, `Invalid data format: ${error.message}`));
+    }
+    
+    // Check for duplicate key errors
+    if (error?.code === 11000) {
+      return next(createHttpError(409, 'Duplicate entry detected'));
+    }
+    
+    // Generic server error
     return next(InternalServerError);
   }
 };
@@ -242,36 +452,86 @@ export const getInvoicesService = async (req: AuthenticatedRequestBody<IUser>, r
       return next(createHttpError(400, `No order found.`));
     }
 
-    if (
-      order.user?.userId?._id.toString() !== req?.user?._id.toString() &&
-      req?.user?.role !== authorizationRoles?.client
-    ) {
+    // Check if user is authorized to access this invoice
+    // Allow access if:
+    // 1. User is the order owner, OR
+    // 2. User has admin role, OR
+    // 3. User has client role
+    
+    // Check order owner - handle both populated and unpopulated user structure
+    const orderUserId = order.user?.userId?._id?.toString() || order.user?.userId?.toString();
+    const currentUserId = req?.user?._id?.toString();
+    const isOrderOwner = orderUserId === currentUserId;
+    
+    // Check roles - normalize for comparison
+    const userRole = String(req?.user?.role || '').toLowerCase().trim();
+    const isAdmin = userRole === authorizationRoles?.admin.toLowerCase().trim();
+    const isClient = userRole === authorizationRoles?.client.toLowerCase().trim();
+    
+    // Debug logging
+    console.log('Invoice access check:', {
+      orderId: orderId,
+      userId: currentUserId,
+      userRole: req?.user?.role,
+      userRoleNormalized: userRole,
+      orderUserId: orderUserId,
+      isOrderOwner,
+      isAdmin,
+      isClient,
+      authorizationRoles: {
+        admin: authorizationRoles?.admin,
+        client: authorizationRoles?.client
+      }
+    });
+    
+    if (!isOrderOwner && !isAdmin && !isClient) {
+      console.error('Invoice access denied:', {
+        orderId: orderId,
+        userId: currentUserId,
+        userRole: req?.user?.role,
+        userRoleNormalized: userRole,
+        orderUserId: orderUserId,
+        isOrderOwner,
+        isAdmin,
+        isClient,
+        authorizationRoles
+      });
       return next(createHttpError(403, `Unauthorized`));
     }
 
-    const invoiceName = `invoice-${orderId}.pdf`;
+    let invoice = await Invoice.findOne({ order: order._id });
 
-    const invoicePath = resolve(process.cwd(), `${process.env.PWD}/public/invoices/${invoiceName}`);
+    if (!invoice) {
+      return next(createHttpError(404, 'Invoice not found for this order'));
+    }
 
-    const pdfDoc = new PDFDocument();
+    if (!invoice.documentPath || !fs.existsSync(invoice.documentPath)) {
+      const regenerated = await generateInvoicePdf({
+        order: order as unknown as OrderT,
+        invoiceNumber: invoice.invoiceNumber,
+      });
+      invoice.documentPath = regenerated.absolutePath;
+      invoice.documentUrl = regenerated.relativePath;
+      invoice = await invoice.save();
+    }
+
+    if (req.query?.download === 'false') {
+      return res.status(200).send(
+        customResponse({
+          success: true,
+          error: false,
+          status: 200,
+          message: 'Successfully fetched invoice metadata',
+          data: { invoice },
+        })
+      );
+    }
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${invoiceName}"`);
-    pdfDoc.pipe(fs.createWriteStream(invoicePath));
-    pdfDoc.pipe(res);
-
-    pdfDoc.fontSize(26).text('Invoice', {
-      underline: true,
-    });
-    pdfDoc.text('-----------------------');
-    let totalPrice = 0;
-    order.orderItems.forEach((prod: any) => {
-      totalPrice += prod.quantity * prod.product.price;
-      // eslint-disable-next-line no-useless-concat
-      pdfDoc.fontSize(15).text(`${prod.product.name} - ${prod.quantity} x ` + `$${prod.product.price}`);
-    });
-    pdfDoc.text('----------------------------------');
-    pdfDoc.fontSize(20).text(`Total Price: $${totalPrice}`);
-    pdfDoc.end();
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    const stream = fs.createReadStream(invoice.documentPath as string);
+    stream.on('error', (err) => next(err));
+    stream.pipe(res);
   } catch (error) {
     return next(InternalServerError);
   }

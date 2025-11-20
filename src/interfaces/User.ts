@@ -46,6 +46,7 @@ export interface IUser extends Document {
       quantity: number;
     }[];
   };
+  wishlist?: string[];
   cloudinary_id?: string;
   followers: string[];
   following: string[];

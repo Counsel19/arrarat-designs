@@ -1,7 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 
 import { ProductT } from '@src/interfaces';
-import { productCategory } from '@src/constants';
 
 export const ProductSchema: Schema<ProductT> = new Schema(
   {
@@ -16,11 +15,6 @@ export const ProductSchema: Schema<ProductT> = new Schema(
     price: {
       type: Number,
       required: [true, 'Please provide price'],
-    },
-    brand: {
-      type: String,
-      required: [true, 'Please product brand'],
-      trim: true,
     },
     description: {
       type: String,
@@ -49,39 +43,9 @@ export const ProductSchema: Schema<ProductT> = new Schema(
       },
     ],
     category: {
-      type: String,
-      enum: {
-        values: [
-          productCategory.womenClothe,
-          productCategory.menClothe,
-          productCategory.menShoe,
-          productCategory.womenShoe,
-          productCategory.toy,
-          productCategory.football,
-          productCategory.book,
-          productCategory.PersonalComputer,
-          productCategory.jewelery,
-          productCategory.electronic,
-          productCategory.sport,
-          productCategory.all,
-        ],
-        message: `Please select category only from short listed option (${productCategory.all},
-        ${productCategory.womenClothe},
-          ${productCategory.menClothe},
-          ${productCategory.menClothe},
-          ${productCategory.womenShoe},
-          ${productCategory.toy},
-          ${productCategory.football},
-          ${productCategory.book},
-          ${productCategory.PersonalComputer},
-          ${productCategory.jewelery},
-          ${productCategory.electronic},
-          ${productCategory.sport})`,
-      },
-      default: productCategory.all,
-      trim: true,
-      lowercase: true,
-      required: [true, 'Category is required please select one'],
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category',
+      required: [true, 'Category is required'],
     },
     stock: {
       type: String,

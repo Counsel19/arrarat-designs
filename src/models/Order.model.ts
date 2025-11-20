@@ -87,51 +87,93 @@ export const orderSchema: Schema<OrderT> = new Schema(
           ref: 'Product',
         },
         quantity: { type: Number, required: true },
+        unitPrice: { type: Number, required: true },
+        nameSnapshot: {
+          type: String,
+          required: true,
+          trim: true,
+        },
       },
     ],
-    paymentInfo: {
-      type: String,
+    subTotal: {
+      type: Number,
       required: true,
+      default: 0,
+    },
+    paymentMethod: {
+      type: String,
+      required: false,
+      default: 'bank-transfer',
     },
     textAmount: {
       type: Number,
       required: true,
+      default: 0,
     },
     shippingAmount: {
       type: Number,
       required: true,
+      default: 0,
     },
     totalAmount: {
       type: Number,
       required: true,
     },
+    invoiceNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+    invoice: {
+      type: Schema.Types.ObjectId,
+      ref: 'Invoice',
+    },
+    whatsappMessageUrl: {
+      type: String,
+      trim: true,
+    },
+    adminContactSnapshot: {
+      type: String,
+      trim: true,
+    },
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          trim: true,
+        },
+        note: {
+          type: String,
+          trim: true,
+        },
+        changedBy: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+        changedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     orderStatus: {
       type: String,
       required: true,
       enum: [
-        orderStatus.cancelled,
-        orderStatus.completed,
-        orderStatus.delivered,
         orderStatus.pending,
-        orderStatus.shipped,
-        orderStatus.waitingPayment,
-        orderStatus.waitingPickup,
+        orderStatus.awaitingPayment,
+        orderStatus.paymentConfirmed,
+        orderStatus.completed,
+        orderStatus.cancelled,
       ],
-      default: orderStatus.pending,
+      default: orderStatus.awaitingPayment,
       trim: true,
-      message: `Please select status only from short listed option (${orderStatus.pending},
-        ${orderStatus.waitingPickup},
-          ${orderStatus.waitingPayment},
-          ${orderStatus.shipped},
-          ${orderStatus.delivered},
-          ${orderStatus.completed},
-          ${orderStatus.cancelled},
-        )`,
+      message: `Please select status only from shortlisted option (${Object.values(orderStatus).join(', ')})`,
     },
     deliveredAt: {
       type: Date,
-      required: true,
-      default: Date.now,
+      required: false,
     },
   },
   {

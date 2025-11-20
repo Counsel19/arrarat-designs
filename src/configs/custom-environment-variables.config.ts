@@ -39,6 +39,8 @@ export const environmentConfig = {
   SMTP_USERNAME: process.env.SMTP_USERNAME,
   SMTP_PASSWORD: process.env.SMTP_PASSWORD,
   SMTP_SERVICE: process.env.SMTP_SERVICE,
+  DEFAULT_ADMIN_WHATSAPP: process.env.DEFAULT_ADMIN_WHATSAPP,
+  ORDER_NOTIFICATION_EMAIL: process.env.ORDER_NOTIFICATION_EMAIL,
 };
 
 export default environmentConfig;

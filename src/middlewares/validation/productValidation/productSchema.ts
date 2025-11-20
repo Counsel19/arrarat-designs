@@ -2,7 +2,6 @@ import Joi from 'joi';
 
 // @ts-ignore
 import JoiObjectId from 'joi-objectid';
-import { productCategory } from '@src/constants';
 
 const vaildObjectId = JoiObjectId(Joi);
 
@@ -21,23 +20,7 @@ export const productSchema = {
     name: Joi.string().min(3).max(100).required(),
     description: Joi.string().min(15).required(),
     price: Joi.number().required(),
-    brand: Joi.string().required(),
-    category: Joi.string()
-      // .required()
-      .valid(
-        productCategory.all,
-        productCategory.book,
-        productCategory.electronic,
-        productCategory.football,
-        productCategory.jewelery,
-        productCategory.menShoe,
-        productCategory.menClothe,
-        productCategory.sport,
-        productCategory.toy,
-        productCategory.womenClothe,
-        productCategory.womenShoe,
-        productCategory.PersonalComputer
-      ),
+    category: Joi.string(),
     stock: Joi.string(),
     count: Joi.number(),
   }),
@@ -46,21 +29,7 @@ export const productSchema = {
     name: Joi.string().min(3).max(100),
     description: Joi.string().min(15),
     price: Joi.number(),
-    brand: Joi.string(),
-    category: Joi.string().valid(
-      productCategory.all,
-      productCategory.book,
-      productCategory.electronic,
-      productCategory.football,
-      productCategory.jewelery,
-      productCategory.menShoe,
-      productCategory.menClothe,
-      productCategory.sport,
-      productCategory.toy,
-      productCategory.womenClothe,
-      productCategory.womenShoe,
-      productCategory.PersonalComputer
-    ),
+    category: Joi.string(),
     stock: Joi.string(),
     mobileNumber: Joi.string(),
     gender: Joi.string(),

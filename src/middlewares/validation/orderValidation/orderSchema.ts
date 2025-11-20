@@ -8,10 +8,9 @@ const vaildObjectId = JoiObjectId(Joi);
 
 export const orderSchema = {
   processingOrder: Joi.object({
-    paymentInfo: Joi.string().required(),
-    orderStatus: Joi.string().required(),
-    textAmount: Joi.number().min(1).required(),
-    shippingAmount: Joi.number().min(1).required(),
+    paymentMethod: Joi.string().allow('', null),
+    textAmount: Joi.number().min(0).default(0),
+    shippingAmount: Joi.number().min(0).default(0),
     totalAmount: Joi.number().min(1),
     shippingInfo: Joi.object()
       .keys({
@@ -39,37 +38,23 @@ export const orderSchema = {
     orderStatus: Joi.string()
       .required()
       .valid(
-        orderStatus.cancelled,
-        orderStatus.completed,
-        orderStatus.delivered,
         orderStatus.pending,
-        orderStatus.shipped,
-        orderStatus.waitingPayment,
-        orderStatus.waitingPickup
+        orderStatus.awaitingPayment,
+        orderStatus.paymentConfirmed,
+        orderStatus.completed,
+        orderStatus.cancelled
       ),
-  }),
-  createStripeCheckoutSession: Joi.object({
-    orderItems: Joi.array()
-      .items(
-        Joi.object()
-          .keys({
-            product: Joi.object()
-              .keys({
-                name: Joi.string().required(),
-                price: Joi.number().required(),
-                description: Joi.string().required(),
-                productImage: Joi.string().required(),
-              })
-              .required(),
-            quantity: Joi.number().min(1).required(),
-          })
-          .required()
-      )
-      .required(),
   }),
   validatedOrderId: Joi.object({
     orderId: vaildObjectId().required(),
   }),
+  confirmPayment: Joi.object({
+    orderId: vaildObjectId(),
+    invoiceNumber: Joi.string().trim(),
+    amount: Joi.number().min(0).required(),
+    reference: Joi.string().allow('', null),
+    note: Joi.string().allow('', null),
+  }).or('orderId', 'invoiceNumber'),
 };
 
 export default orderSchema;

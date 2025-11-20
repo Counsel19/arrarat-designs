@@ -71,7 +71,7 @@ export const getProductService = async (req: AuthenticatedRequestBody<IUser>, re
   }
 
   try {
-    const product = await Product.findById(req.params.productId);
+    const product = await Product.findById(req.params.productId).populate('category');
 
     if (!product) {
       return next(new createHttpError.BadRequest());
@@ -110,7 +110,7 @@ export const addProductToCartService = async (
   next: NextFunction
 ) => {
   try {
-    const product = await Product.findById(req.body.productId);
+    const product = await Product.findById(req.body.productId).populate('category');
 
     if (!product) {
       return next(new createHttpError.BadRequest());

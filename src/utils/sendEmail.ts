@@ -576,4 +576,199 @@ export const sendEmailVerificationEmail = async (userEmail: string, userName: st
   }
 };
 
-export default { sendEmailVerificationEmail, sendEmail, sendResetPasswordEmail, sendConfirmResetPasswordEmail };
+type NewOrderNotificationPayload = {
+  adminEmail?: string;
+  customerName: string;
+  customerPhone?: string;
+  invoiceNumber: string;
+  orderId: string;
+  totalAmount: number;
+  whatsappUrl?: string;
+};
+
+export const sendNewOrderNotificationEmail = async ({
+  adminEmail,
+  customerName,
+  customerPhone,
+  invoiceNumber,
+  orderId,
+  totalAmount,
+  whatsappUrl,
+}: NewOrderNotificationPayload) => {
+  if (!adminEmail) return;
+  
+  const whatsappLink = whatsappUrl 
+    ? `<p><a href="${whatsappUrl}" style="background-color: #25D366; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Contact Customer on WhatsApp</a></p>`
+    : customerPhone 
+      ? `<p><strong>Customer Phone:</strong> <a href="tel:${customerPhone}">${customerPhone}</a></p><p>Please reach out to the customer via WhatsApp using the phone number above to continue fulfilment.</p>`
+      : '<p>Please reach out to the customer via WhatsApp to continue fulfilment.</p>';
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif;">
+      <h2>New Order Alert</h2>
+      <p>A new order has been placed.</p>
+      <ul>
+        <li><strong>Customer:</strong> ${customerName}</li>
+        ${customerPhone ? `<li><strong>Customer Phone:</strong> <a href="tel:${customerPhone}">${customerPhone}</a></li>` : ''}
+        <li><strong>Order ID:</strong> ${orderId}</li>
+        <li><strong>Invoice Number:</strong> ${invoiceNumber}</li>
+        <li><strong>Total:</strong> ₦${totalAmount.toLocaleString()}</li>
+      </ul>
+      ${whatsappLink}
+    </div>
+  `;
+
+  await resend.emails.send({
+    from: 'Arrarat Designs <no-reply@araratdesigns.org>',
+    to: adminEmail,
+    subject: `New order ${invoiceNumber}`,
+    html,
+  });
+};
+
+type OrderConfirmationPayload = {
+  customerEmail: string;
+  customerName: string;
+  invoiceNumber: string;
+  orderId: string;
+  totalAmount: number;
+  orderItems?: Array<{
+    name: string;
+    quantity: number;
+    unitPrice?: number;
+    price?: number;
+  }>;
+  shippingAddress?: string;
+};
+
+type PaymentConfirmationPayload = {
+  customerEmail: string;
+  customerName: string;
+  invoiceNumber: string;
+  orderId: string;
+};
+
+export const sendOrderConfirmationEmail = async ({
+  customerEmail,
+  customerName,
+  invoiceNumber,
+  orderId,
+  totalAmount,
+  orderItems,
+  shippingAddress,
+}: OrderConfirmationPayload) => {
+  if (!customerEmail) return;
+  
+  const itemsList = orderItems?.map((item: any, index: number) => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">${index + 1}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name || 'Product'}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity || 1}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₦${((item.unitPrice || item.price || 0) * (item.quantity || 1)).toLocaleString()}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" style="padding: 8px; text-align: center;">No items found</td></tr>';
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h2 style="color: #0f2a45; margin-top: 0;">Order Confirmed!</h2>
+        <p>Hi ${customerName},</p>
+        <p>Thank you for your order with Ararat Designs. We've received your order and it's being processed.</p>
+      </div>
+      
+      <div style="background-color: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 20px;">
+        <h3 style="color: #0f2a45; margin-top: 0; border-bottom: 2px solid #0f2a45; padding-bottom: 10px;">Order Details</h3>
+        <table style="width: 100%; margin-bottom: 15px;">
+          <tr>
+            <td style="padding: 5px 0;"><strong>Order ID:</strong></td>
+            <td style="padding: 5px 0;">${orderId}</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0;"><strong>Invoice Number:</strong></td>
+            <td style="padding: 5px 0;">${invoiceNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0;"><strong>Order Total:</strong></td>
+            <td style="padding: 5px 0;"><strong>₦${totalAmount.toLocaleString()}</strong></td>
+          </tr>
+        </table>
+      </div>
+      
+      ${shippingAddress ? `
+      <div style="background-color: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 20px;">
+        <h3 style="color: #0f2a45; margin-top: 0; border-bottom: 2px solid #0f2a45; padding-bottom: 10px;">Shipping Address</h3>
+        <p style="margin: 5px 0;">${shippingAddress}</p>
+      </div>
+      ` : ''}
+      
+      <div style="background-color: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 20px;">
+        <h3 style="color: #0f2a45; margin-top: 0; border-bottom: 2px solid #0f2a45; padding-bottom: 10px;">Order Items</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background-color: #f8f9fa;">
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #0f2a45;">#</th>
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #0f2a45;">Product</th>
+              <th style="padding: 10px; text-align: center; border-bottom: 2px solid #0f2a45;">Qty</th>
+              <th style="padding: 10px; text-align: right; border-bottom: 2px solid #0f2a45;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsList}
+          </tbody>
+        </table>
+      </div>
+      
+      <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+        <p style="margin: 0; color: #2e7d32;"><strong>Next Steps:</strong></p>
+        <p style="margin: 5px 0 0 0;">Our team will reach out to you via WhatsApp to confirm payment instructions and provide delivery updates. Please keep your invoice number (${invoiceNumber}) ready for reference.</p>
+      </div>
+      
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #6c757d; font-size: 12px;">
+        <p>Thank you for shopping with Ararat Designs!</p>
+        <p>If you have any questions, please don't hesitate to contact our support team.</p>
+      </div>
+    </div>
+  `;
+
+  await resend.emails.send({
+    from: 'Arrarat Designs <no-reply@araratdesigns.org>',
+    to: customerEmail,
+    subject: `Order Confirmed - ${invoiceNumber}`,
+    html,
+  });
+};
+
+export const sendPaymentConfirmationEmail = async ({
+  customerEmail,
+  customerName,
+  invoiceNumber,
+  orderId,
+}: PaymentConfirmationPayload) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif;">
+      <h2>Payment Confirmed</h2>
+      <p>Hi ${customerName},</p>
+      <p>Your payment for invoice <strong>${invoiceNumber}</strong> has been confirmed.</p>
+      <p>Order ID: <strong>${orderId}</strong></p>
+      <p>Our team will reach out with delivery updates.</p>
+      <p>Thank you for shopping with Ararat Designs.</p>
+    </div>
+  `;
+
+  await resend.emails.send({
+    from: 'Arrarat Designs <no-reply@araratdesigns.org>',
+    to: customerEmail,
+    subject: `Payment confirmation - ${invoiceNumber}`,
+    html,
+  });
+};
+
+export default {
+  sendEmailVerificationEmail,
+  sendEmail,
+  sendResetPasswordEmail,
+  sendConfirmResetPasswordEmail,
+  sendNewOrderNotificationEmail,
+  sendOrderConfirmationEmail,
+  sendPaymentConfirmationEmail,
+};

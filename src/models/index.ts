@@ -1,5 +1,11 @@
 // export * from './Post.model';
+export * from './Category.model';
+export * from './Contact.model';
+export * from './FAQ.model';
 export * from './Order.model';
 export * from './Product.model';
 export * from './Token.model';
 export * from './User.model';
+export * from './Invoice.model';
+export * from './Transaction.model';
+export * from './Setting.model';

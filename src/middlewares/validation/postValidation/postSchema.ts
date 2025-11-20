@@ -3,8 +3,6 @@ import Joi from 'joi';
 // @ts-ignore
 import JoiObjectId from 'joi-objectid';
 
-import { postCategory } from '@src/constants';
-
 const vaildObjectId = JoiObjectId(Joi);
 
 export const postSchema = {
@@ -12,33 +10,13 @@ export const postSchema = {
     filename: Joi.string().required().label('Invalid request (Please upload Image)'),
     title: Joi.string().min(3).max(100).required(),
     content: Joi.string().min(5).required(),
-    category: Joi.string().valid(
-      postCategory.blockchain,
-      postCategory.coding,
-      postCategory.devApp,
-      postCategory.nextjs,
-      postCategory.nodejs,
-      postCategory.reactjs,
-      postCategory.sports,
-      postCategory.typeScript,
-      postCategory.social
-    ),
+    category: vaildObjectId().required(),
   }),
   updatePost: Joi.object({
     title: Joi.string().min(3).max(100),
     content: Joi.string().min(5),
     postId: vaildObjectId().required(),
-    category: Joi.string().valid(
-      postCategory.blockchain,
-      postCategory.coding,
-      postCategory.devApp,
-      postCategory.nextjs,
-      postCategory.nodejs,
-      postCategory.reactjs,
-      postCategory.sports,
-      postCategory.typeScript,
-      postCategory.social
-    ),
+    category: vaildObjectId().required(),
     filename: Joi.string().label('Invalid request (Please upload Image)'),
   }),
   addComment: Joi.object({
